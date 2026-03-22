@@ -12,6 +12,7 @@ export const config = {
   youtubeSummaryUseWsl: process.env.YOUTUBE_SUMMARY_USE_WSL === "true",
   youtubeSummaryScriptPath: process.env.YOUTUBE_SUMMARY_SCRIPT_PATH ?? "",
   dataDir: process.env.DATA_DIR ?? "./data",
+  useGoogleWorkspace: process.env.USE_GOOGLE_WORKSPACE === "true",
   assistantName: process.env.ASSISTANT_NAME ?? "Personal Assistant",
   sessionIdleTimeoutMs: 30 * 60 * 1000, // 30 minutes
 };

@@ -6,7 +6,12 @@ import {
   getActiveSessionCount,
   getMcpServerNames,
 } from "./session-manager.js";
-import { getDueReminders } from "./tools/task-tracker.js";
+import {
+  getDueReminders,
+  listTasksDirect,
+  listRemindersDirect,
+  cleanupOldEntries,
+} from "./tools/task-tracker.js";
 import { splitMessage } from "./utils/telegram.js";
 import { allTools } from "./tools/index.js";
 import { logger } from "./utils/logger.js";
@@ -76,14 +81,46 @@ export function createBot(): Bot {
     await ctx.reply("🔄 Fresh conversation started! How can I help?");
   });
 
-  // /tasks — quick view
+  // /tasks — quick view (reads from SQLite or Google Workspace)
   bot.command("tasks", async (ctx) => {
-    const session = await getOrCreateSession(ctx.from!.id);
-    await handleCopilotMessage(
-      ctx,
-      session,
-      "List all my pending tasks in a concise format.",
-    );
+    const userId = String(ctx.from!.id);
+    const tasks = await listTasksDirect(userId);
+    const reminders = await listRemindersDirect(userId);
+
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    let msg = "*📋 Tasks & Reminders*\n\n";
+
+    if (tasks.length === 0 && reminders.length === 0) {
+      msg += "No pending tasks or reminders.";
+    } else {
+      if (tasks.length > 0) {
+        msg += "*Tasks:*\n";
+        for (const t of tasks) {
+          const status = t.status === "in_progress" ? "🔄" : "⬜";
+          const due = t.due_date ? ` (due: ${t.due_date})` : "";
+          msg += `${status} ${t.title}${due}\n`;
+        }
+      }
+      if (reminders.length > 0) {
+        if (tasks.length > 0) msg += "\n";
+        msg += "*Reminders:*\n";
+        for (const r of reminders) {
+          if (config.useGoogleWorkspace) {
+            const localTime = new Date(r.remind_at).toLocaleString("en-US", { timeZone: tz });
+            msg += `⏰ ${r.message} — ${localTime}\n`;
+          } else {
+            const localTime = new Date(r.remind_at + "Z").toLocaleString("en-US", { timeZone: tz });
+            msg += `⏰ ${r.message} — ${localTime}\n`;
+          }
+        }
+      }
+    }
+
+    try {
+      await ctx.reply(msg, { parse_mode: "Markdown" });
+    } catch {
+      await ctx.reply(msg);
+    }
   });
 
   // /model — switch model
@@ -154,25 +191,31 @@ export function createBot(): Bot {
     }
   });
 
-  // Start reminder polling
-  reminderInterval = setInterval(async () => {
-    try {
-      const reminders = getDueReminders();
-      for (const r of reminders) {
-        try {
-          await bot.api.sendMessage(
-            parseInt(r.user_id, 10),
-            `⏰ *Reminder:* ${r.message}`,
-            { parse_mode: "Markdown" },
-          );
-        } catch (err) {
-          logger.error(`Failed to send reminder to ${r.user_id}:`, err);
+  // SQLite-only: clean up old entries and start reminder polling
+  if (!config.useGoogleWorkspace) {
+    try { cleanupOldEntries(); } catch { /* ignore */ }
+
+    reminderInterval = setInterval(async () => {
+      try {
+        const reminders = getDueReminders();
+        for (const r of reminders) {
+          try {
+            await bot.api.sendMessage(
+              parseInt(r.user_id, 10),
+              `⏰ *Reminder:* ${r.message}`,
+              { parse_mode: "Markdown" },
+            );
+          } catch (err) {
+            logger.error(`Failed to send reminder to ${r.user_id}:`, err);
+          }
         }
+      } catch {
+        // DB might not be initialized yet
       }
-    } catch {
-      // DB might not be initialized yet
-    }
-  }, 60_000); // Check every minute
+    }, 60_000); // Check every minute
+  } else {
+    logger.info("Google Workspace mode enabled — skipping local reminder polling");
+  }
 
   return bot;
 }

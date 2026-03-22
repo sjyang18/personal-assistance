@@ -7,8 +7,8 @@ A personal AI assistant powered by [GitHub Copilot SDK](https://github.com/githu
 - 💬 **Conversational AI** — Chat with GitHub Copilot through Telegram
 - 🔍 **Web Search** — Search the web for current information
 - 💻 **Code Generation** — Generate and explain code in any language
-- 📋 **Task Tracking** — Add, list, and manage tasks (persisted in SQLite)
-- ⏰ **Reminders** — Set reminders that notify you via Telegram
+- 📋 **Task Tracking** — Add, list, and manage tasks (SQLite by default, or Google Tasks)
+- ⏰ **Reminders** — Set reminders via Telegram polling (default) or Google Calendar notifications
 - 📁 **File Management** — Read, write, and list files
 - 🔄 **Session Management** — Per-user Copilot sessions with auto-cleanup
 
@@ -48,6 +48,7 @@ npm start
 | `MODEL` | | Copilot model (default: `gpt-4.1`) |
 | `COPILOT_CLI_URL` | | External CLI server URL (empty = local subprocess) |
 | `DATA_DIR` | | Data directory for SQLite (default: `./data`) |
+| `USE_GOOGLE_WORKSPACE` | | Set to `true` to use Google Tasks + Calendar instead of SQLite |
 
 ## CLI Connection Modes
 
@@ -74,6 +75,34 @@ COPILOT_CLI_URL=localhost:4321
 | `/tasks` | Show your tasks |
 | `/model <name>` | Switch AI model |
 | `/status` | Bot status info |
+
+## Google Workspace Integration (Optional)
+
+By default, tasks and reminders are stored locally in SQLite. To sync them with Google Tasks and Google Calendar instead, install and authenticate the [Google Workspace CLI](https://github.com/googleworkspace/cli):
+
+```bash
+# Install gws CLI
+npm install -g @googleworkspace/cli
+
+# Authenticate with your Google account
+gws auth login
+
+# Verify authentication
+gws auth whoami
+```
+
+Then enable the integration in your `.env`:
+
+```
+USE_GOOGLE_WORKSPACE=true
+```
+
+When enabled:
+- **Tasks** are stored in Google Tasks (synced across all your devices)
+- **Reminders** create Google Calendar events with popup notifications
+- Local SQLite polling is disabled — Google Calendar handles notifications natively
+
+For full gws CLI documentation, see the [official repository](https://github.com/googleworkspace/cli).
 
 ## Development
 
